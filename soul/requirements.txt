@@ -1,0 +1,11 @@
+# 由 temp/soul 代码扫描 + 实际使用推断生成（最小集）
+# 说明：common/chatSoul 属于项目内模块，不需要写入 requirements
+
+uiautomator2
+requests
+
+# uiautomator2 的常见依赖（通常会被 pip 自动解析安装）
+adbutils
+lxml
+Pillow
+retry
