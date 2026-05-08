@@ -13,5 +13,6 @@ print("设备连接成功:", d)
 if d.app_current()['package'] != "com.MsgSender.io.fycc":
     d.app_start("com.MsgSender.io.fycc")
     time.sleep(1)
-game.click_text(d, "进入游戏")
 
+
+game.click_text(d, "进入游戏")

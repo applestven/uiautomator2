@@ -1,14 +1,17 @@
 import uiautomator2 as u2
 import time
 import sys
-import os
 sys.stdout.reconfigure(encoding='utf-8')
 import json
 import common.utils as utils
 import common.game as game
 d = u2.connect_usb()
+import os
 
 print("设备连接成功:", d)
+
+# 烽火璀璨游戏的日常流程
+
 
 # 如果不在前台才启动 # 等待加载
 if d.app_current()['package'] != "com.MsgSender.io.fycc":
@@ -28,11 +31,13 @@ if d.app_current()['package'] != "com.MsgSender.io.fycc":
 # utils.print_current_page_elements(d)
 # d.click(720, 2050)
 
-# game.click_text(d, "没有账号")
+# 模板图路径使用基于当前文件的绝对路径，避免受启动目录影响
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 重启应用
-# utils.restart_app(d, "com.MsgSender.io.fycc")
+game.click_icon(d, os.path.join(BASE_DIR, "icon", "战场.png"))
 
-game.click_icon(d, os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon", "战场.png") )
-
+game.click_text(d,"进入游戏")
+game.click_icon(d, os.path.join(BASE_DIR, "icon", "战场.png"))
+game.click_text(d,"商城")
+game.click_icon(d, os.path.join(BASE_DIR, "icon", "看视频得奖励列表.png"))
 

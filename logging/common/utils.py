@@ -1,6 +1,7 @@
 import random
 import http.client
 import json
+import time
 # uiautomator2工具函数
 
 ## 定义一个点击函数参数有text:元素文本 timeout:等待时间  return:无
@@ -198,3 +199,10 @@ def print_current_page_elements(d):
     # 打印当前页面所有元素（xml）
     xml = d.dump_hierarchy()
     print(xml)
+
+## 重启应用
+def restart_app(d, package_name):
+    d.app_stop(package_name)
+    time.sleep(1)
+    d.app_start(package_name)
+    print(f"已重启应用: {package_name}")

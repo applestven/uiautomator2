@@ -144,3 +144,6 @@ vite.config.ts.timestamp-*
 .vite/
 log_backup/
 __pycache__/
+
+
+screen.png
