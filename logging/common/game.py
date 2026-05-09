@@ -23,16 +23,51 @@ import cv2
 import time
 import os
 import numpy as np
+import logging
 
-ocr = PaddleOCR(use_angle_cls=False, lang="ch")
+# 关闭 PaddleOCR / ppocr 的 DEBUG 日志
+logging.getLogger().setLevel(logging.WARNING)
+logging.getLogger("ppocr").setLevel(logging.WARNING)
+logging.getLogger("paddle").setLevel(logging.WARNING)
 
-def click_text(d, target_text, timeout=10, interval=1, img_path="screen.png"):
+ocr = PaddleOCR(use_angle_cls=False, lang="ch", show_log=False)
+
+def click_text(d, target_text, timeout=10, interval=1, img_path="screen.png", debug=False, debug_dir="debug"):
     start = time.time()
+    last_texts = []
+
+    if debug:
+        os.makedirs(debug_dir, exist_ok=True)
+
+    print(f"尝试点击文字: {target_text}")
 
     while time.time() - start < timeout:
         d.screenshot(img_path)
 
         result = ocr.ocr(img_path, cls=False)
+
+        texts = []
+        if result and result[0]:
+            for line in result[0]:
+                try:
+                    text = line[1][0]
+                except Exception:
+                    continue
+                texts.append(text)
+
+        last_texts = texts
+
+        if debug:
+            print(f"OCR识别到: {texts}")
+            ts = time.strftime("%Y%m%d_%H%M%S")
+            try:
+                img = _imread_robust(img_path)
+                if img is None:
+                    img = cv2.imread(img_path)
+                if img is not None:
+                    cv2.imencode('.png', img)[1].tofile(os.path.join(debug_dir, f"{ts}_ocr.png"))
+            except Exception:
+                pass
 
         if not result or not result[0]:
             time.sleep(interval)
@@ -50,6 +85,7 @@ def click_text(d, target_text, timeout=10, interval=1, img_path="screen.png"):
 
         time.sleep(interval)
 
+    print(f"未找到文字: {target_text}；最后一次OCR={last_texts}")
     return False
 
 def _imread_robust(path: str):
@@ -84,6 +120,15 @@ def click_icon(
     debug: 为 True 时会落盘截图与匹配可视化，便于调参/确认模板是否正确
     """
     template_path = os.path.abspath(template_path)
+
+    ## 获取template_path的文件名（不含扩展名）作为目标文字
+    target_text = os.path.splitext(os.path.basename(template_path))[0]
+
+    ## 先尝试使用文字匹配点击，如果成功则直接返回，避免后续的模板匹配计算开销
+    if click_text(d, target_text, timeout=timeout, interval=interval, debug=debug, debug_dir=debug_dir):
+        ## 打印点击成功的文字
+        print(f"点击文字成功click_icon: {template_path}")
+        return True
 
     if scales is None:
         scales = [0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3]
@@ -204,6 +249,74 @@ def click_icon(
 
     print(
         f"未找到图标: {template_path} best_score={best['score']:.3f} best_loc={best['loc']} best_scale={best['scale']}"
+    )
+    return False
+
+
+def wait_for_text_disappear(
+    d,
+    target_text: str,
+    timeout: int = 60,
+    interval: float = 1.0,
+    initial_wait: float = 3.0,
+    img_path: str = "screen.png",
+    debug: bool = False,
+    debug_dir: str = "debug",
+) -> bool:
+    """等待某段文字从屏幕上消失。
+
+    适用场景：进入游戏后出现“检查更新/加载中/连接中”等提示，需要等待它消失再进行后续点击。
+
+    返回：
+      - True：在 timeout 内检测到文字已消失
+      - False：超时仍存在（或 OCR 反复失败导致无法确认）
+    """
+
+    if initial_wait and initial_wait > 0:
+        time.sleep(initial_wait)
+
+    if debug:
+        os.makedirs(debug_dir, exist_ok=True)
+
+    start = time.time()
+    last_seen = None
+
+    while time.time() - start < timeout:
+        d.screenshot(img_path)
+        result = ocr.ocr(img_path, cls=False)
+
+        found = False
+        if result and result[0]:
+            for line in result[0]:
+                text = line[1][0]
+                if target_text in text:
+                    found = True
+                    last_seen = time.time()
+                    break
+
+        if not found:
+            print(f"文字已消失: {target_text}")
+            return True
+
+        # 仍然存在
+        print(f"等待文字消失中: {target_text}")
+
+        if debug:
+            ts = time.strftime("%Y%m%d_%H%M%S")
+            # 仅在看到文字时落盘，避免刷屏
+            try:
+                img = _imread_robust(img_path)
+                if img is None:
+                    img = cv2.imread(img_path)
+                if img is not None:
+                    cv2.imencode('.png', img)[1].tofile(os.path.join(debug_dir, f"{ts}_wait_{target_text}.png"))
+            except Exception:
+                pass
+
+        time.sleep(interval)
+
+    print(
+        f"等待文字消失超时: {target_text} timeout={timeout}s last_seen={last_seen}"
     )
     return False
 
