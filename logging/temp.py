@@ -33,6 +33,6 @@ if d.app_current()['package'] != "com.MsgSender.io.fycc":
 # 重启应用
 # utils.restart_app(d, "com.MsgSender.io.fycc")
 
-game.click_icon(d, os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon", "战场.png") )
+game.click_icon(d, os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon", "看视频得奖励列表.png") )
 
 

@@ -56,7 +56,7 @@ while not game.wait_for_text_disappear(d, "连接失败", timeout=10):
 if not game.click_icon(d, os.path.join(BASE_DIR, "icon", "战场.png")):
     sys.exit("点击战场图标失败")
 
-if not game.click_text(d,"商城"):
+if not game.click_icon(d,"商城"):
     sys.exit("点击商城失败")
 
 if not game.click_icon(d, os.path.join(BASE_DIR, "icon", "看视频得奖励列表.png")):
