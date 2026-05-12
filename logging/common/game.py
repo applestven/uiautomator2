@@ -1,4 +1,5 @@
 ## 游戏是画面 没有xpath 一般是ocr识别文字 输出坐标
+## 注意你在什么分辨率下截的图 就要在什么分辨率下打开模拟器否则识别不到点击
 
 ## cpu 方式
 # pip install paddlepaddle==2.6.2
@@ -295,7 +296,7 @@ def wait_for_text_disappear(
                     break
 
         if not found:
-            print(f"文字已消失: {target_text}")
+            print(f"等待文字消失: {target_text}")
             return True
 
         # 仍然存在
