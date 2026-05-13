@@ -56,9 +56,21 @@ while not game.wait_for_text_disappear(d, "连接失败", timeout=10):
 if not game.click_icon(d, os.path.join(BASE_DIR, "icon", "战场.png")):
     sys.exit("点击战场图标失败")
 
-if not game.click_icon(d,"商城"):
+if not game.click_icon(d,os.path.join(BASE_DIR, "icon", "商城.png")):
     sys.exit("点击商城失败")
 
 if not game.click_icon(d, os.path.join(BASE_DIR, "icon", "看视频得奖励列表.png")):
     sys.exit("点击看视频得奖励列表图标失败")
 
+# 点击刷新卡广告
+if not game.click_icon(d, os.path.join(BASE_DIR, "icon", "刷新卡广告.png")):
+    sys.exit("点击刷新卡广告图标失败")
+
+
+# # 等待文字消失：跳过 等待“首次出现”的最长时间45秒(广告30s 广告加载给15s 识别不到文字的保底方法)
+# if not game.wait_for_text_disappear(d, "跳过" ,appear_timeout=45):
+#     sys.exit("等待跳过广告失败")
+
+# # 点击关闭广告
+# if not game.click_icon(d, os.path.join(BASE_DIR, "icon", "关闭广告.png")):
+#     sys.exit("点击关闭广告图标失败")

@@ -25,6 +25,8 @@ import time
 import os
 import numpy as np
 import logging
+import json
+import urllib.request
 
 # 关闭 PaddleOCR / ppocr 的 DEBUG 日志
 logging.getLogger().setLevel(logging.WARNING)
@@ -100,10 +102,27 @@ def _imread_robust(path: str):
     except Exception:
         return None
 
+def _log_request(message: str, level: str = "info", url: str = "http://127.0.0.1:9191/log"):
+    """向本地日志服务发送一条日志（避免引入额外依赖）。"""
+    try:
+        payload = json.dumps({"message": message, "level": level}).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            resp.read()
+    except Exception:
+        # 日志上报失败不影响主流程
+        pass
 
+# 添加参数 是否点击文字
 def click_icon(
     d,
     template_path,
+    is_click_text=False,
     timeout=10,
     interval=1,
     threshold=0.8,
@@ -112,6 +131,8 @@ def click_icon(
     debug_dir="debug",
     scales=None,
     grayscale=True,
+    log_request: bool = True,
+    log_url: str = "http://127.0.0.1:9191/log",
 ):
     """
     template_path: 小图标路径，比如 gift.png
@@ -119,15 +140,18 @@ def click_icon(
     scales: 多尺度匹配缩放列表，None 则使用默认 [0.7..1.3]
     grayscale: 灰度匹配通常更稳（降低颜色/发光影响）
     debug: 为 True 时会落盘截图与匹配可视化，便于调参/确认模板是否正确
+    log_request: 是否调用本地日志接口上报“点击：<图片名>”
     """
     template_path = os.path.abspath(template_path)
 
     ## 获取template_path的文件名（不含扩展名）作为目标文字
     target_text = os.path.splitext(os.path.basename(template_path))[0]
 
-    ## 先尝试使用文字匹配点击，如果成功则直接返回，避免后续的模板匹配计算开销
-    if click_text(d, target_text, timeout=timeout, interval=interval, debug=debug, debug_dir=debug_dir):
-        ## 打印点击成功的文字
+    if log_request:
+        _log_request(f"点击：{target_text}", level="info", url=log_url)
+
+    ## 根据is_click_text 先尝试使用文字匹配点击，如果成功则直接返回，避免后续的模板匹配计算开销
+    if is_click_text and click_text(d, target_text, timeout=timeout, interval=interval, debug=debug, debug_dir=debug_dir):
         print(f"点击文字成功click_icon: {template_path}")
         return True
 
@@ -257,20 +281,23 @@ def click_icon(
 def wait_for_text_disappear(
     d,
     target_text: str,
-    timeout: int = 60,
     interval: float = 1.0,
     initial_wait: float = 3.0,
     img_path: str = "screen.png",
     debug: bool = False,
     debug_dir: str = "debug",
+    appear_timeout: float = 10.0,
+    disappear_timeout: float = 60.0,
 ) -> bool:
-    """等待某段文字从屏幕上消失。
+    """等待某段文字从屏幕上消失（严格 有->无 才 True）。
 
-    适用场景：进入游戏后出现“检查更新/加载中/连接中”等提示，需要等待它消失再进行后续点击。
+    参数：
+      - appear_timeout：等待文字“首次出现”的最长时间（秒）。超时仍未出现 => False
+      - disappear_timeout：文字出现后，等待其“消失”的最长时间（秒）。超时仍未消失 => False
 
     返回：
-      - True：在 timeout 内检测到文字已消失
-      - False：超时仍存在（或 OCR 反复失败导致无法确认）
+      - True：检测到文字经历了“有 -> 无”
+      - False：未在 appear_timeout 内出现；或出现后未在 disappear_timeout 内消失
     """
 
     if initial_wait and initial_wait > 0:
@@ -279,10 +306,9 @@ def wait_for_text_disappear(
     if debug:
         os.makedirs(debug_dir, exist_ok=True)
 
-    start = time.time()
-    last_seen = None
-
-    while time.time() - start < timeout:
+    # 先等出现
+    start_appear = time.time()
+    while time.time() - start_appear < appear_timeout:
         d.screenshot(img_path)
         result = ocr.ocr(img_path, cls=False)
 
@@ -292,19 +318,45 @@ def wait_for_text_disappear(
                 text = line[1][0]
                 if target_text in text:
                     found = True
-                    last_seen = time.time()
+                    break
+
+        if found:
+            if debug:
+                print(f"检测到文字首次出现: {target_text}")
+            break
+
+        if debug:
+            elapsed = time.time() - start_appear
+            print(f"等待文字出现中: {target_text} elapsed={elapsed:.1f}s")
+
+        time.sleep(interval)
+    else:
+        if debug:
+            print(f"等待文字出现超时: {target_text} appear_timeout={appear_timeout}s")
+        return False
+
+    # 再等消失
+    start_disappear = time.time()
+    while time.time() - start_disappear < disappear_timeout:
+        d.screenshot(img_path)
+        result = ocr.ocr(img_path, cls=False)
+
+        found = False
+        if result and result[0]:
+            for line in result[0]:
+                text = line[1][0]
+                if target_text in text:
+                    found = True
                     break
 
         if not found:
-            print(f"等待文字消失: {target_text}")
+            print(f"文字已从有到无: {target_text}")
             return True
 
-        # 仍然存在
-        print(f"等待文字消失中: {target_text}")
-
         if debug:
+            elapsed = time.time() - start_disappear
+            print(f"等待文字消失中: {target_text} elapsed={elapsed:.1f}s")
             ts = time.strftime("%Y%m%d_%H%M%S")
-            # 仅在看到文字时落盘，避免刷屏
             try:
                 img = _imread_robust(img_path)
                 if img is None:
@@ -316,9 +368,8 @@ def wait_for_text_disappear(
 
         time.sleep(interval)
 
-    print(
-        f"等待文字消失超时: {target_text} timeout={timeout}s last_seen={last_seen}"
-    )
+    if debug:
+        print(f"等待文字消失超时: {target_text} disappear_timeout={disappear_timeout}s")
     return False
 
 
