@@ -373,12 +373,22 @@ def wait_for_text_disappear(
     return False
 
 
-# 调用方式：
+def wait_for_text_appear(d, target_text, timeout=10, interval=1):
+    start = time.time()
 
-# import uiautomator2 as u2
+    while time.time() - start < timeout:
+        d.screenshot("screen.png")
+        result = ocr.ocr("screen.png", cls=False)
 
-# d = u2.connect_usb()
+        if result and result[0]:
+            for line in result[0]:
+                text = line[1][0]
+                if target_text in text:
+                    print(f"检测到文字: {target_text}")
+                    return True
 
-# click_text(d, "进入游戏")
-# click_text(d, "确定")
-# click_text(d, "刷新")
+        print(f"等待文字出现中: {target_text}")
+        time.sleep(interval)
+
+    print(f"等待文字出现超时: {target_text} timeout={timeout}s")
+    return False

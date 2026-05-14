@@ -2,6 +2,7 @@ import random
 import http.client
 import json
 import time
+import os
 # uiautomator2工具函数
 
 ## 定义一个点击函数参数有text:元素文本 timeout:等待时间  return:无
@@ -206,3 +207,124 @@ def restart_app(d, package_name):
     time.sleep(1)
     d.app_start(package_name)
     print(f"已重启应用: {package_name}")
+
+# -------------------------
+# 坐标点击/监听/坐标库
+# -------------------------
+
+def _coords_file_path(coords_file: str | None = None) -> str:
+    """坐标库文件路径（默认 logging/common/coords.json 同目录）。"""
+    if coords_file:
+        return os.path.abspath(coords_file)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "coords.json")
+
+
+def load_coords(coords_file: str | None = None) -> dict:
+    path = _coords_file_path(coords_file)
+    if not os.path.exists(path):
+        return {"coords": {}}
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f) or {"coords": {}}
+
+
+def save_coords(data: dict, coords_file: str | None = None) -> None:
+    path = _coords_file_path(coords_file)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def set_coord(name: str, x: int, y: int, coords_file: str | None = None) -> None:
+    data = load_coords(coords_file)
+    data.setdefault("coords", {})
+    data["coords"][name] = {"x": int(x), "y": int(y)}
+    save_coords(data, coords_file)
+
+
+def get_coord(name: str, coords_file: str | None = None) -> tuple[int, int] | None:
+    data = load_coords(coords_file)
+    c = (data.get("coords") or {}).get(name)
+    if not c:
+        return None
+    return int(c["x"]), int(c["y"])
+
+
+def click_xy(d, x: int, y: int, *, name: str | None = None, delay: float = 0.0, save: bool = False, coords_file: str | None = None):
+    """点击指定坐标。可选保存到 coords.json。"""
+    if delay and delay > 0:
+        time.sleep(delay)
+    d.click(int(x), int(y))
+    if name:
+        print(f"点击坐标: {name} ({int(x)},{int(y)})")
+        if save:
+            set_coord(name, int(x), int(y), coords_file)
+    else:
+        print(f"点击坐标: ({int(x)},{int(y)})")
+    return True
+
+
+def click_coord_name(d, name: str, *, delay: float = 0.0, coords_file: str | None = None):
+    """按坐标名点击（从 coords.json 取坐标）。"""
+    xy = get_coord(name, coords_file)
+    if not xy:
+        print(f"坐标名不存在: {name} (file={_coords_file_path(coords_file)})")
+        return False
+    x, y = xy
+    return click_xy(d, x, y, name=name, delay=delay, save=False, coords_file=coords_file)
+
+
+def _copy_to_clipboard(text: str):
+    """复制到剪贴板（Windows 优先用 clip；失败则仅打印）。"""
+    try:
+        # Windows: echo xxx | clip
+        os.system(f"echo {text} | clip")
+        return True
+    except Exception:
+        return False
+
+
+def watch_click_and_copy(
+    d,
+    *,
+    name_prefix: str = "coord",
+    interval: float = 0.2,
+    coords_file: str | None = None,
+    save: bool = True,
+    copy_format: str = "{name}: ({x},{y})",
+):
+    """监听你手动点击屏幕的位置，自动打印/复制，并可写入 coords.json。
+
+    说明：uiautomator2 没有稳定的“全局触摸事件订阅”，这里采用轮询 last_click 坐标的方式。
+    个别设备/版本可能不支持 last_click；不支持时会提示并退出。
+
+    copy_format 示例：
+      - "{name}: ({x},{y})"  -> 复制形如：coord_1: (100,200)
+      - "{\"name\":\"{name}\",\"x\":{x},\"y\":{y}}" -> 复制 json 片段
+    """
+
+    if not hasattr(d, "last_click"):
+        print("当前设备对象不支持 d.last_click，无法监听点击。")
+        return
+
+    idx = 1
+    prev = None
+    print("开始监听点击坐标（手动点击手机/模拟器屏幕）。按 Ctrl+C 停止。")
+
+    try:
+        while True:
+            cur = d.last_click
+            if cur and cur != prev:
+                prev = cur
+                x, y = int(cur[0]), int(cur[1])
+                name = f"{name_prefix}_{idx}"
+                idx += 1
+
+                msg = copy_format.format(name=name, x=x, y=y)
+                print(msg)
+                _copy_to_clipboard(msg)
+
+                if save:
+                    set_coord(name, x, y, coords_file)
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("已停止监听点击坐标")

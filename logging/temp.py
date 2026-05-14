@@ -38,4 +38,4 @@ if d.app_current()['package'] != "com.MsgSender.io.fycc":
 # game.wait_for_text_disappear(d, "跳过", timeout=30, interval=2)
 
 # game.click_text(d, "跳过",10,1,os.path.abspath("screen copy.png"))
-# game.click_icon(d, os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon", "关闭广告.png"), is_click_text=False)
+game.click_icon(d, os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon", "关闭广告.png"), is_click_text=False)
